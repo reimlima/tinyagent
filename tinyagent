@@ -13,7 +13,7 @@
 # Script for easy data collection of CPU, Memory, Disk, Load and Uptime        #
 #                                                                              #
 # reimlima@gmail.com                                                           #
-# $Id: tinyagent,v 1 2015/04/30 reimlima Exp reimlima $                        #
+# $Id: tinyagent,v 1.1 2015/05/04 reimlima Exp reimlima $                      #
 #                                                                              #
 #[ License ]-------------------------------------------------------------------#
 #                                                                              #
@@ -71,6 +71,7 @@
 #                                                                              #
 #[ Changelog ]-----------------------------------------------------------------#
 #                                                                              #
+# v1.1 - [04/05/2015] - Better "error description" to the log file.            #
 #                                                                              #
 #------------------------------------------------------------------------------#
 
@@ -144,23 +145,23 @@ sysDiskUsage(){
 }
 
 scriptOutput(){
-	echo "{ \"tinyagent\": [ { \"hostname\" : \" $HOSTNAME\" }, { \"timestamp\" : $TIMESTAMP }, "$SCRIPTOUTPUT" ] }"
+	echo "{ \"tinyagent\": [ { \"hostname\" : \"$HOSTNAME\" }, { \"timestamp\" : $TIMESTAMP }, "$SCRIPTOUTPUT" ] }"
 }
 
 executionFlow(){
 
         sysUltime
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/uptime is accessible 1"
 	wait
 	sysLoad
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/loadavg is accessible 1"
 	wait
 	sysCpuUsage
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/stat is accessible 1"
 	sysMemoryUsage
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/meminfo is accessible 1"
 	sysDiskUsage
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check partition table 1"
 	scriptOutput $SCRIPTOUTPUT
 	exiterrorfunc "all check operations were done successfully 0"
 
