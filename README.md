@@ -20,82 +20,62 @@ Changelog
 
 - 30/04/2015    - v1    - First release.
 - 04/05/2015    - v1.1  - Better "error description" to the log file.
+- 03/12/2015    - v2    - Script now collect info from Network intarfaces. 
 
 Output
 ===============
 
 Here's an output example:
 
-	{
-		"tinyagent": [
-			{
-				"hostname": "localserver"
-			},
-			{
-				"timestamp": 1234567890
-			},
-			{
-				"diskusage": [
-					{
-						"mountpoint": "/",
-						"usage": [
-							{
-								"total": 49426680
-							},
-							{
-								"used": 20333656
-							},
-							{
-								"free": 26559240
-							}
-						]
-					}
-				]
-			},
-			{
-				"memusage": [
-					{
-						"memtotal": 8053536
-					},
-					{
-						"memfree": 416368
-					},
-					{
-						"buffers": 140320
-					},
-					{
-						"cached": 1829176
-					}
-				]
-			},
-			{
-				"cpuusage": [
-					{
-						"user": 9876218
-					},
-					{
-						"system": 3015700
-					},
-					{
-						"wait": 87097
-					}
-				]
-			},
-			{
-				"loadavg": [
-					{
-						"onemin": 0.2
-					},
-					{
-						"fivemin": 0.21
-					},
-					{
-						"tenmin": 0.16
-					}
-				]
-			},
-			{
-				"uptime": 1060048
-			}
-		]
-	}
+{
+	"tinyagent": [{
+		"hostname": "c019531"
+	}, {
+		"timestamp": 1449152309
+	}, {
+		"nettraffic": [{
+			"rx_eth0": 148225
+		}, {
+			"tx_eth0": 19537
+		}]
+	}, {
+		"diskusage": [{
+			"mountpoint": "/",
+			"usage": [{
+				"total": 49426680
+			}, {
+				"used": 17541032
+			}, {
+				"free": 29351864
+			}]
+		}]
+	}, {
+		"memusage": [{
+			"memtotal": 8131888
+		}, {
+			"memfree": 2104880
+		}, {
+			"buffers": 192028
+		}, {
+			"cached": 1742148
+		}]
+	}, {
+		"cpuusage": [{
+			"user": 458604
+		}, {
+			"system": 182236
+		}, {
+			"wait": 2806
+		}]
+	}, {
+		"loadavg": [{
+			"onemin": 0.46
+		}, {
+			"fivemin": 0.56
+		}, {
+			"tenmin": 0.58
+		}]
+	}, {
+		"uptime": 13172
+	}]
+}

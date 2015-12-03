@@ -5,15 +5,17 @@
 # tinyagent                                                                    #
 #                                                                              #
 # PT-br:                                                                       #
-# Script para facil coleta de dados de CPU, Memoria, Disco, Load e Uptime      #
+# Script  para  facil  coleta  de dados de CPU, Memoria, Disco, Load, Uptime e #
+# Interfaces de Rede                                                           #
 #                                                                              #
 # ----------------------------                                                 #
 #                                                                              #
 # EN:                                                                          #
-# Script for easy data collection of CPU, Memory, Disk, Load and Uptime        #
+# Script  for  easy  data  collection  of  CPU, Memory, Disk, Load, Uptime and #
+# Network Intarfaces                                                           #
 #                                                                              #
 # reimlima@gmail.com                                                           #
-# $Id: tinyagent,v 1.1 2015/05/04 reimlima Exp reimlima $                      #
+# $Id: tinyagent,v 2 2015/05/04 reimlima Exp reimlima $                        #
 #                                                                              #
 #[ License ]-------------------------------------------------------------------#
 #                                                                              #
@@ -72,6 +74,7 @@
 #[ Changelog ]-----------------------------------------------------------------#
 #                                                                              #
 # v1.1 - [04/05/2015] - Better "error description" to the log file.            #
+# v2   - [03/12/2015] - Script now collect info from Network intarfaces.       #
 #                                                                              #
 #------------------------------------------------------------------------------#
 
@@ -79,12 +82,16 @@
 
 DF=$(which df)
 AWK=$(which awk)
+CAT=$(which cat)
 SED=$(which sed)
+GREP=$(which grep)
 DATE=$(which date)
 HEAD=$(which head)
+IFCONFIG=$(which ifconfig)
 TIMESTAMP=$($DATE +%s)
 HOSTNAME=$(hostname -s)
 SCRIPTNAME=$(basename $0)
+TINYAGENTDB=".tinyagentdb"
 TINYAGENTLOG="tinyagent.log"
 SCRIPTOUTPUT=""
 
@@ -140,7 +147,35 @@ sysDiskUsage(){
 	$SED '/^\//!d' | \
 	$AWK '{ print "{ \"mountpoint\": \""$NF"\", \"usage\" : [ { \"total\": "$2" }, { \"used\": "$3" }, { \"free\": "$4" } ] },"}' | \
 	$SED ':a;$!N;s/\n/ /g;ta;s/,$//')
-	SCRIPTOUTPUT="{ \"diskusage\" : [ "$SYSDISK" ] }, $SCRIPTOUTPUT"
+	SCRIPTOUTPUT="{ \"diskusage\" : [ $SYSDISK ] }, $SCRIPTOUTPUT"
+
+}
+
+sysNetworkUsage(){
+
+	UPDATEDBFILE=""
+	SYSNETTRAFFIC=""
+	INTERFACELIST=$(ifconfig -a | grep 'eth[0-9]\{1,\}' | awk '{print $1}')
+
+	for i in ${INTERFACELIST[@]} ; do
+		RXBYTES=$(cat /sys/class/net/${i}/statistics/rx_bytes)
+		TXBYTES=$(cat /sys/class/net/${i}/statistics/tx_bytes)
+		if [[ -e $TINYAGENTDB ]]; then
+			source $TINYAGENTDB
+			RXAUX="RXBYTES_$i"
+			TXAUX="TXBYTES_$i"
+			RECEIVEDBYTES=$(($RXBYTES-${!RXAUX}))
+			TRANSMITTEDBYTES=$(($TXBYTES-${!TXAUX}))
+			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": "$RECEIVEDBYTES" }, { \"tx_${i}\": $TRANSMITTEDBYTES }"
+			UPDATEDBFILE=$UPDATEDBFILE"RXBYTES_${i}=$RXBYTES\nTXBYTES_${i}=$TXBYTES\n"
+		else
+			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": 0 }, { \"tx_${i}\": 0 }"
+			UPDATEDBFILE=$UPDATEDBFILE"RXBYTES_${i}=$RXBYTES\nTXBYTES_${i}=$TXBYTES\n"
+		fi
+	done
+
+	SCRIPTOUTPUT="{ \"nettraffic\" : [ $SYSNETTRAFFIC ] }, $SCRIPTOUTPUT"
+	echo -e $UPDATEDBFILE > $TINYAGENTDB
 
 }
 
@@ -150,7 +185,7 @@ scriptOutput(){
 
 executionFlow(){
 
-        sysUltime
+	sysUltime
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/uptime is accessible 1"
 	wait
 	sysLoad
@@ -158,10 +193,14 @@ executionFlow(){
 	wait
 	sysCpuUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/stat is accessible 1"
+	wait
 	sysMemoryUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/meminfo is accessible 1"
+	wait
 	sysDiskUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check partition table 1"
+	sysNetworkUsage
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check network interfaces configuration 1"
 	scriptOutput $SCRIPTOUTPUT
 	exiterrorfunc "all check operations were done successfully 0"
 
