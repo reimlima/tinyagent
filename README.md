@@ -1,7 +1,7 @@
 tinyagent
 ===============
 
-Script for easy data collection of CPU, Memory, Disk, Load and Uptime.
+Script for easy data collection of CPU, Memory, Disk, Load, Uptime adn Network Interfaces.
 
 Output format: JSON
 
