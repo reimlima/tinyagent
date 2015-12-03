@@ -199,6 +199,7 @@ executionFlow(){
 	wait
 	sysDiskUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check partition table 1"
+	wait
 	sysNetworkUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check network interfaces configuration 1"
 	scriptOutput $SCRIPTOUTPUT
