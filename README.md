@@ -21,6 +21,8 @@ Changelog
 - 30/04/2015    - v1    - First release.
 - 04/05/2015    - v1.1  - Better "error description" to the log file.
 - 03/12/2015    - v2    - Script now collect info from Network intarfaces. 
+- 04/14/2015    - v2.1  - Fix 'Network intarfaces' json format.
+                        - Better output in 'df' command.
 
 Output
 ===============

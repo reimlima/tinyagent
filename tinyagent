@@ -75,6 +75,8 @@
 #                                                                              #
 # v1.1 - [04/05/2015] - Better "error description" to the log file.            #
 # v2   - [03/12/2015] - Script now collect info from Network intarfaces.       #
+# v2.1 - [04/12/2015] - Fix 'Network intarfaces' json format.                  #
+#                     - Better output in 'df' command.                         #
 #                                                                              #
 #------------------------------------------------------------------------------#
 
@@ -143,7 +145,7 @@ sysMemoryUsage(){
 
 sysDiskUsage(){
 
-	SYSDISK=$($DF -k | \
+	SYSDISK=$($DF -Pk | \
 	$SED '/^\//!d' | \
 	$AWK '{ print "{ \"mountpoint\": \""$NF"\", \"usage\" : [ { \"total\": "$2" }, { \"used\": "$3" }, { \"free\": "$4" } ] },"}' | \
 	$SED ':a;$!N;s/\n/ /g;ta;s/,$//')
@@ -166,14 +168,15 @@ sysNetworkUsage(){
 			TXAUX="TXBYTES_$i"
 			RECEIVEDBYTES=$(($RXBYTES-${!RXAUX}))
 			TRANSMITTEDBYTES=$(($TXBYTES-${!TXAUX}))
-			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": "$RECEIVEDBYTES" }, { \"tx_${i}\": $TRANSMITTEDBYTES }"
+			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": "$RECEIVEDBYTES" }, { \"tx_${i}\": $TRANSMITTEDBYTES }, "
 			UPDATEDBFILE=$UPDATEDBFILE"RXBYTES_${i}=$RXBYTES\nTXBYTES_${i}=$TXBYTES\n"
 		else
-			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": 0 }, { \"tx_${i}\": 0 }"
+			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": 0 }, { \"tx_${i}\": 0 }, "
 			UPDATEDBFILE=$UPDATEDBFILE"RXBYTES_${i}=$RXBYTES\nTXBYTES_${i}=$TXBYTES\n"
 		fi
 	done
 
+	SYSNETTRAFFIC=${SYSNETTRAFFIC%, }
 	SCRIPTOUTPUT="{ \"nettraffic\" : [ $SYSNETTRAFFIC ] }, $SCRIPTOUTPUT"
 	echo -e $UPDATEDBFILE > $TINYAGENTDB
 
