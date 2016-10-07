@@ -11,9 +11,9 @@ Notice
 This script was tested and work well in:
 
 * Linux
-⋅⋅* OS Distribution: CentOS release 6.6 (Final)
-⋅⋅* Kernel: 2.6.32-504.3.3.el6.x86_64
-⋅⋅* GNU bash: version 4.1.2(1)-release (x86_64-redhat-linux-gnu)
+* OS Distribution: CentOS release 6.6 (Final)
+* Kernel: 2.6.32-504.3.3.el6.x86_64
+* GNU bash: version 4.1.2(1)-release (x86_64-redhat-linux-gnu)
 
 Changelog
 ===============
@@ -22,9 +22,9 @@ Changelog
 * 04/05/2015    - v1.1  - [FIX] Better "error description" to the log file.
 * 03/12/2015    - v2    - [FEATURE] Script now collect info from Network intarfaces. 
 * 04/14/2015    - v2.1  - [FIX] Fix 'Network intarfaces' json format.
-⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅- [FIX] Better output in 'df' command.
+                        - [FIX] Better output in 'df' command.
 *10/07/2015	- v3	- [FIX] Now it show all 'Network intarfaces' no matter the name.
-⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅- [FEATURE] I/O read and write informations for all partitions.
+                        - [FEATURE] I/O read and write informations for all partitions.
 
 Output
 ===============
