@@ -73,15 +73,29 @@
 #                                                                              #
 #[ Changelog ]-----------------------------------------------------------------#
 #                                                                              #
-# v1.1 - [04/05/2015] - Better "error description" to the log file.            #
-# v2   - [03/12/2015] - Script now collect info from Network intarfaces.       #
-# v2.1 - [04/12/2015] - Fix 'Network intarfaces' json format.                  #
-#                     - Better output in 'df' command.                         #
+# 30/04/2015	- v1    - First release.                                       #
+#                                                                              #
+# 04/05/2015	- v1.1  - [ FIX ]  Better "error description" to the log file. #
+#                                                                              #
+# 03/12/2015	- v2    - [ FEATURE ]  Script  now  collect  info from Network #
+#			  intarfaces.                                          #
+#                                                                              #
+# 04/14/2015	- v2.1  - [ FIX ] Fix  'Network  intarfaces'  json  format.    #
+#			- [ FIX ] Better  output  in  'df'  command.           #
+#                                                                              #
+# 10/07/2016	- v3    - [ FIX ] Now  it  show  all  'Network  intarfaces' no #
+#			  matter the name.                                     #
+#                                                                              #
+#			- [ FEATURE ] I/O  read and write informations for all #
+#			  partitions.                                          #
 #                                                                              #
 #------------------------------------------------------------------------------#
 
 #[ Variables ]-----------------------------------------------------------------#
 
+# System Commands
+
+LS=$(which ls)
 DF=$(which df)
 AWK=$(which awk)
 CAT=$(which cat)
@@ -89,13 +103,31 @@ SED=$(which sed)
 GREP=$(which grep)
 DATE=$(which date)
 HEAD=$(which head)
-IFCONFIG=$(which ifconfig)
+
+# System info
+
 TIMESTAMP=$($DATE +%s)
 HOSTNAME=$(hostname -s)
 SCRIPTNAME=$(basename $0)
+
+# System files
+
+FILECPU="/proc/stat"
+FILEMEM="/proc/meminfo"
+FILELOAD="/proc/loadavg"
+FILEIO="/proc/diskstats"
+FILEUPTIME="/proc/uptime"
+FILEPARTITIONS="/proc/partitions"
+
+# Script Files
+
 TINYAGENTDB=".tinyagentdb"
 TINYAGENTLOG="tinyagent.log"
+
+# Empty Variables
+
 SCRIPTOUTPUT=""
+UPDATEDBFILE=""
 
 #[ Functions ]-----------------------------------------------------------------#
 
@@ -114,21 +146,21 @@ exiterrorfunc(){
 
 sysUltime(){
 
-	SYSUPTIME=$($AWK -F\. '{print "{ \"uptime\": "$1" }"}' /proc/uptime)
+	SYSUPTIME=$($AWK -F\. '{print "{ \"uptime\": "$1" }"}' $FILEUPTIME)
 	SCRIPTOUTPUT="$SYSUPTIME $SCRIPTOUTPUT"
 
 }
 
 sysLoad(){
 
-	SYSLOAD=$($AWK '{print "{ \"loadavg\": [ { \"onemin\": "$1" }, { \"fivemin\": "$2" }, { \"tenmin\": "$3" } ] }"}' /proc/loadavg)
+	SYSLOAD=$($AWK '{print "{ \"loadavg\": [ { \"onemin\": "$1" }, { \"fivemin\": "$2" }, { \"tenmin\": "$3" } ] }"}' $FILELOAD)
 	SCRIPTOUTPUT="$SYSLOAD, $SCRIPTOUTPUT"
 
 }
 
 sysCpuUsage(){
 
-	SYSCPU=$($HEAD -1 /proc/stat | \
+	SYSCPU=$($HEAD -1 $FILECPU | \
 	$AWK '{print "{ \"cpuusage\": [ { \"user\": "$2" }, { \"system\": "$4" }, { \"wait\": "$6" } ] }"}')
 	SCRIPTOUTPUT="$SYSCPU, $SCRIPTOUTPUT"
 
@@ -136,7 +168,7 @@ sysCpuUsage(){
 
 sysMemoryUsage(){
 
-	SYSMEM=$($SED '/^\(MemTotal\|MemFree\|Buffers\|Cached\)/!d' /proc/meminfo | \
+	SYSMEM=$($SED '/^\(MemTotal\|MemFree\|Buffers\|Cached\)/!d' $FILEMEM | \
 	$SED ':a;$!N;s/\n//g;ta;s/kB//g;s/[ ]\{1,\}/ /g;s/ \([0-9]\{1,\}\) / \1, /g;s/.*/\L&/g;s/\([a-z]\{1,\}\)/"\1"/g' | \
 	$AWK -F, '{print "{ \"memusage\" : [ { "$1" }, {"$2" }, {"$3" }, {"$4" } ] }"}')
 	SCRIPTOUTPUT="$SYSMEM, $SCRIPTOUTPUT"
@@ -153,55 +185,103 @@ sysDiskUsage(){
 
 }
 
+sysIOStats(){
+
+	IOSTATS=""
+	PARTITIONS=$($SED '1,2d' $FILEPARTITIONS | $SED '/[a-z]\{1,\}[0-9]$/!d' | $AWK '{print $NF}')
+
+	if [[ -e $TINYAGENTDB ]]; then
+		source $TINYAGENTDB
+		for i in ${PARTITIONS[@]} ; do
+			PARTITION=$($GREP ${i} $FILEIO | $AWK '{ print $3}')
+			TSRMS=$($GREP ${i} $FILEIO | $AWK '{ print $7}')
+			TSWMS=$($GREP ${i} $FILEIO | $AWK '{ print $11}')
+			TSIOMS=$($GREP ${i} $FILEIO | $AWK '{ print $13}')
+			TSRAUX="TSRMS_$i"
+			TSWAUX="TSWMS_$i"
+			TSIOAUX="TSIOMS_$i"
+			TSRMILLISECONDS=$(($TSRMS-${!TSRAUX}))
+			TSWMILLISECONDS=$(($TSWMS-${!TSWAUX}))
+			TSIOMILLISECONDS=$(($TSIOMS-${!TSIOAUX}))
+			IOSTATS=$IOSTATS"{ \"partition\": \"$PARTITION\", \""$PARTITION"_time_spent_reading\": $TSRMILLISECONDS, \""$PARTITION"_time_spent_writing\": $TSWMILLISECONDS, \""$PARTITION"_time_spent_doing_io\": $TSIOMILLISECONDS },"
+			UPDATEDBFILE=$UPDATEDBFILE"TSRMS_${i}=$TSRMS\nTSWMS_${i}=$TSWMS\nTSIOMS_${i}=$TSIOMS\n"
+		done
+	else
+		for i in ${PARTITIONS[@]} ; do
+			PARTITION=$($GREP ${i} $FILEIO | $AWK '{ print $3}')
+			TSRMS=$($GREP ${i} $FILEIO | $AWK '{ print $7}')
+			TSWMS=$($GREP ${i} $FILEIO | $AWK '{ print $11}')
+			TSIOMS=$($GREP ${i} $FILEIO | $AWK '{ print $13}')
+			TSRAUX="TSRMS_$i"
+			TSWAUX="TSWMS_$i"
+			TSIOAUX="TSIOMS_$i"
+			IOSTATS=$IOSTATS"{ \"partition\": \"$PARTITION\", \""$PARTITION"_time_spent_reading\": 0, \""$PARTITION"_time_spent_writing\": 0, \""$PARTITION"_time_spent_doing_io\": 0 },"
+			UPDATEDBFILE=$UPDATEDBFILE"TSRMS_${i}=$TSRMS\nTSWMS_${i}=$TSWMS\nTSIOMS_${i}=$TSIOMS\n"
+		done
+	fi
+
+	IOSTATS=$(echo $IOSTATS | sed 's/,$//')
+	SCRIPTOUTPUT="{ \"iostats\": [ $IOSTATS ] }, $SCRIPTOUTPUT"
+	
+}
+
 sysNetworkUsage(){
 
-	UPDATEDBFILE=""
 	SYSNETTRAFFIC=""
-	INTERFACELIST=$(ifconfig -a | grep 'eth[0-9]\{1,\}' | awk '{print $1}')
+	INTERFACELIST=$($LS -1 /sys/class/net/)
 
-	for i in ${INTERFACELIST[@]} ; do
-		RXBYTES=$(cat /sys/class/net/${i}/statistics/rx_bytes)
-		TXBYTES=$(cat /sys/class/net/${i}/statistics/tx_bytes)
-		if [[ -e $TINYAGENTDB ]]; then
-			source $TINYAGENTDB
+	if [[ -e $TINYAGENTDB ]]; then
+		source $TINYAGENTDB
+		for i in ${INTERFACELIST[@]} ; do
+			RXBYTES=$(cat /sys/class/net/${i}/statistics/rx_bytes)
+			TXBYTES=$(cat /sys/class/net/${i}/statistics/tx_bytes)
 			RXAUX="RXBYTES_$i"
 			TXAUX="TXBYTES_$i"
 			RECEIVEDBYTES=$(($RXBYTES-${!RXAUX}))
 			TRANSMITTEDBYTES=$(($TXBYTES-${!TXAUX}))
 			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": "$RECEIVEDBYTES" }, { \"tx_${i}\": $TRANSMITTEDBYTES }, "
 			UPDATEDBFILE=$UPDATEDBFILE"RXBYTES_${i}=$RXBYTES\nTXBYTES_${i}=$TXBYTES\n"
-		else
+		done
+	else
+		for i in ${INTERFACELIST[@]} ; do
+			RXBYTES=$(cat /sys/class/net/${i}/statistics/rx_bytes)
+			TXBYTES=$(cat /sys/class/net/${i}/statistics/tx_bytes)
+			RXAUX="RXBYTES_$i"
+			TXAUX="TXBYTES_$i"
 			SYSNETTRAFFIC=$SYSNETTRAFFIC"{ \"rx_${i}\": 0 }, { \"tx_${i}\": 0 }, "
 			UPDATEDBFILE=$UPDATEDBFILE"RXBYTES_${i}=$RXBYTES\nTXBYTES_${i}=$TXBYTES\n"
-		fi
-	done
+		done
+	fi
 
 	SYSNETTRAFFIC=${SYSNETTRAFFIC%, }
 	SCRIPTOUTPUT="{ \"nettraffic\" : [ $SYSNETTRAFFIC ] }, $SCRIPTOUTPUT"
-	echo -e $UPDATEDBFILE > $TINYAGENTDB
 
 }
 
 scriptOutput(){
 	echo "{ \"tinyagent\": [ { \"hostname\" : \"$HOSTNAME\" }, { \"timestamp\" : $TIMESTAMP }, "$SCRIPTOUTPUT" ] }"
+	echo -e $UPDATEDBFILE > $TINYAGENTDB
 }
 
 executionFlow(){
 
 	sysUltime
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/uptime is accessible 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file $FILEUPTIME is accessible 1"
 	wait
 	sysLoad
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/loadavg is accessible 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file $FILELOAD is accessible 1"
 	wait
 	sysCpuUsage
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/stat is accessible 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file $FILECPU is accessible 1"
 	wait
 	sysMemoryUsage
-	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file /proc/meminfo is accessible 1"
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the file $FILEMEM is accessible 1"
 	wait
 	sysDiskUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check partition table 1"
+	wait
+	sysIOStats
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check if the files $FILEPARTITIONS and $FILEIO are accessible 1"
 	wait
 	sysNetworkUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check network interfaces configuration 1"
