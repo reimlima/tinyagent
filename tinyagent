@@ -5,17 +5,18 @@
 # tinyagent                                                                    #
 #                                                                              #
 # PT-br:                                                                       #
-# Script  para  facil  coleta  de dados de CPU, Memoria, Disco, Load, Uptime e #
-# Interfaces de Rede                                                           #
+# Script  para  facil  coleta  de  dados  de  CPU,  Memoria, Disco, I/O, Load, #
+# Uptime,  Consistência  de  Data e Hora, Interfaces de Rede e Estatísticas de #
+# Rede                                                                         #
 #                                                                              #
 # ----------------------------                                                 #
 #                                                                              #
 # EN:                                                                          #
-# Script  for  easy  data  collection  of  CPU, Memory, Disk, Load, Uptime and #
-# Network Intarfaces                                                           #
+# Script  for  easy  data  collection  of  CPU, Memory, Disk, I/O Stats, Load, #
+# Uptime, Time Consistency, Network Interfaces and Network Statistics.         #
 #                                                                              #
 # reimlima@gmail.com                                                           #
-# $Id: tinyagent,v 2 2015/05/04 reimlima Exp reimlima $                        #
+# $Id: tinyagent,v 4 2016/10/10 reimlima Exp reimlima $                        #
 #                                                                              #
 #[ License ]-------------------------------------------------------------------#
 #                                                                              #
@@ -75,19 +76,23 @@
 #                                                                              #
 # 30/04/2015	- v1    - First release.                                       #
 #                                                                              #
-# 04/05/2015	- v1.1  - [ FIX ]  Better "error description" to the log file. #
+# 04/05/2015	- v1.1  - [ FIX ]  Better "error description" to the log file  #
 #                                                                              #
 # 03/12/2015	- v2    - [ FEATURE ]  Script  now  collect  info from Network #
-#			  intarfaces.                                          #
+#			  intarfaces                                           #
 #                                                                              #
-# 04/14/2015	- v2.1  - [ FIX ] Fix  'Network  intarfaces'  json  format.    #
-#			- [ FIX ] Better  output  in  'df'  command.           #
+# 04/14/2015	- v2.1  - [ FIX ] Fix  'Network  intarfaces'  json  format     #
+#			- [ FIX ] Better  output  in  'df'  command            #
 #                                                                              #
 # 10/07/2016	- v3    - [ FIX ] Now  it  show  all  'Network  intarfaces' no #
-#			  matter the name.                                     #
+#			  matter the name                                      #
 #                                                                              #
 #			- [ FEATURE ] I/O  read and write informations for all #
-#			  partitions.                                          #
+#			  partitions                                           #
+#                                                                              #
+# 10/10/2016	- v4	- [FEATURE] Time Consistency                           #
+#                                                                              #
+#                         [FEATURE] Network Statistics                         #
 #                                                                              #
 #------------------------------------------------------------------------------#
 
@@ -103,6 +108,8 @@ SED=$(which sed)
 GREP=$(which grep)
 DATE=$(which date)
 HEAD=$(which head)
+NTPDC=$(which ntpdc)
+NSTAT=$(which nstat)
 
 # System info
 
@@ -258,6 +265,37 @@ sysNetworkUsage(){
 
 }
 
+sysNetStatistics(){
+
+	if [[ -n $NSTAT ]] ; then
+		SYSNETSTATISTICS=$($NSTAT -a --json -z | $SED 's/kernel/netstatistics/')
+		SCRIPTOUTPUT="$SYSNETSTATISTICS, $SCRIPTOUTPUT"
+	else
+		return 1
+	fi
+
+}
+
+sysTimeConcistency(){
+
+	if [[ -n $NTPDC ]] ; then
+
+		TIMECONSISTENCY="{ \"status\": 0, \"message\": \"server datetime OK\" }"
+
+		for i in $($NTPDC -s | $AWK '/[0-9]/{ print $(NF-1) }'); do
+			STATUS=$(echo ${i} | $AWK 'BEGIN { time = 0; } /[0-9]/ { ntptime = int ($(NF-1)); if (ntptime < 0) ntptime *= -1; if (ntptime > time) time = ntptime; } END { print time }')
+			if [ $STATUS -ne  0 ] ; then
+				TIMECONSISTENCY="{ \"status\": $STATUS, \"message\": \"check server datetime\" }"
+				break
+			fi
+		done
+		SCRIPTOUTPUT="{ \"timeconsistency\" : [ $TIMECONSISTENCY ] }, $SCRIPTOUTPUT"
+	else
+		return 1
+	fi
+
+}
+
 scriptOutput(){
 	echo "{ \"tinyagent\": [ { \"hostname\" : \"$HOSTNAME\" }, { \"timestamp\" : $TIMESTAMP }, "$SCRIPTOUTPUT" ] }"
 	echo -e $UPDATEDBFILE > $TINYAGENTDB
@@ -285,6 +323,12 @@ executionFlow(){
 	wait
 	sysNetworkUsage
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, check network interfaces configuration 1"
+	wait
+	sysTimeConcistency
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, unable to find ntpdc command 1"
+	wait
+	sysNetStatistics
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, unable to find nstat command 1"
 	scriptOutput $SCRIPTOUTPUT
 	exiterrorfunc "all check operations were done successfully 0"
 
