@@ -82,6 +82,8 @@
 #                                                                                                       #
 #                         [FEATURE] Network Statistics                                                  #
 #                                                                                                       #
+# 25/10/2016	- v5	- [FEATURE] Monitoring a Process List, read README for more information         #
+#                                                                                                       #
 #-------------------------------------------------------------------------------------------------------#
 
 #[ Variables ]------------------------------------------------------------------------------------------#
@@ -90,6 +92,7 @@
 
 LS=$(which ls)
 DF=$(which df)
+WC=$(which wc)
 AWK=$(which awk)
 CAT=$(which cat)
 SED=$(which sed)
@@ -98,6 +101,7 @@ DATE=$(which date)
 HEAD=$(which head)
 NTPDC=$(which ntpdc)
 NSTAT=$(which nstat)
+NETSTAT=$(which netstat)
 
 # System info
 
@@ -123,6 +127,11 @@ TINYAGENTLOG="tinyagent.log"
 
 SCRIPTOUTPUT=""
 UPDATEDBFILE=""
+LISTENPROCESS=""
+
+# Arrays
+
+PROCESSPORTARRAY=("443" "22")
 
 #[ Functions ]------------------------------------------------------------------------------------------#
 
@@ -214,7 +223,7 @@ sysIOStats(){
 		done
 	fi
 
-	IOSTATS=$(echo $IOSTATS | sed 's/,$//')
+	IOSTATS=${IOSTATS%,}
 	SCRIPTOUTPUT="{ \"iostats\": [ $IOSTATS ] }, $SCRIPTOUTPUT"
 	
 }
@@ -267,7 +276,7 @@ sysTimeConcistency(){
 
 	if [[ -n $NTPDC ]] ; then
 
-		TIMECONSISTENCY="{ \"status\": 0, \"message\": \"server datetime OK\" }"
+		TIMECONSISTENCY="{ \"status\": 0, \"message\": \"server datetime ok\" }"
 
 		for i in $($NTPDC -s | $AWK '/[0-9]/{ print $(NF-1) }'); do
 			STATUS=$(echo ${i} | $AWK 'BEGIN { time = 0; } /[0-9]/ { ntptime = int ($(NF-1)); if (ntptime < 0) ntptime *= -1; if (ntptime > time) time = ntptime; } END { print time }')
@@ -280,6 +289,26 @@ sysTimeConcistency(){
 	else
 		return 1
 	fi
+
+}
+
+sysProcessMonitoring(){
+
+	PROCESSLIST=""
+
+	ELEMENTCOUNT=${#PROCESSPORTARRAY[*]}
+        for (( i=0 ; i < $ELEMENTCOUNT ; i++ )); do
+		LISTENPROCESS=$($NETSTAT -tanp 2>/dev/null | $GREP LISTEN | $AWK '{print $4}' | $SED "/^\(\([1]\?[0-9]\{1,2\}\|2\([0-4][0-9]\|5[0-5]\)\)\.\)\{3\}\([1]\?[0-9]\{1,2\}\|2\([0-4][0-9]\|5[0-5]\)\):${PROCESSPORTARRAY[$i]}$/!d")
+		if [[ -n $LISTENPROCESS ]]; then
+			ESTABPROCESSNUMBER=$($NETSTAT -tanp 2>/dev/null | $GREP ESTAB | $GREP "${PROCESSPORTARRAY[$i]}" | $AWK '{print $NF}' | $SED 's/^\([0-9]\{1,\}\)\/[a-z]\{1,\}/\1/' | $WC -l)
+			PROCESSLIST=$PROCESSLIST"{ \"process_${PROCESSPORTARRAY[$i]}\" : \"up\", \"process_count_${PROCESSPORTARRAY[$i]}\": \"$ESTABPROCESSNUMBER\" }, "
+		else
+			PROCESSLIST=$PROCESSLIST"{ \"process_${PROCESSPORTARRAY[$i]}\" : \"down\", \"process_count_${PROCESSPORTARRAY[$i]}\": \"0\" }, "
+		fi
+	done
+
+	PROCESSLIST=${PROCESSLIST%, }
+	SCRIPTOUTPUT="{ \"processmonitoring\" : [ $PROCESSLIST ] }, $SCRIPTOUTPUT"
 
 }
 
@@ -316,6 +345,9 @@ executionFlow(){
 	wait
 	sysNetStatistics
 	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, unable to find nstat command 1"
+	wait
+	sysProcessMonitoring
+	[ $? -eq 0 ] || exiterrorfunc "Something went wrong, unable to run netstat command 1"
 	scriptOutput $SCRIPTOUTPUT
 	exiterrorfunc "all check operations were done successfully 0"
 
